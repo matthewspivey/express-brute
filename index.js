@@ -27,16 +27,16 @@ function ExpressBrute(store, options) {
   this.prevent = this.getMiddleware();
 }
 
-ExpressBrute.prototype.getMiddleware = function(options) {
+ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
   // standardize input
-  options = _.extend({}, options);
-  let keyFunc = options.key;
-  if (typeof keyFunc !== 'function') {
-    keyFunc = function(req, res, next) {
-      next(options.key);
-    };
-  }
-  const getFailCallback = _.bind(function() {
+  const options = { ...optionsRaw };
+  const keyFunc =
+    typeof options.key === 'function' ? options.key : (req, res, next) => next(options.key);
+
+  // const getFailCallback =
+  //   typeof options.failCallback === 'function' ? options.failCallback : this.options.failCallback;
+
+  const getFailCallback = _.bind(() => {
     return typeof options.failCallback === 'undefined'
       ? this.options.failCallback
       : options.failCallback;
