@@ -44,21 +44,15 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
     keyFunc(
       req,
       res,
-      _.bind(function(key) {
-        if (!options.ignoreIP) {
-          key = ExpressBrute._getKey([req.ip, this.name, key]);
-        } else {
-          key = ExpressBrute._getKey([this.name, key]);
-        }
+      _.bind(key => {
+        const keyHash = ExpressBrute._getKey(options.ignoreIP ? [this.name, key] : [req.ip, this.name, key]);
 
         // attach a simpler "reset" function to req.brute.reset
         if (this.options.attachResetToRequest) {
-          let reset = _.bind(function(callback) {
-            this.store.reset(key, function(err) {
+          let reset = _.bind(callback => {
+            this.store.reset(keyHash, function(err) {
               if (typeof callback === 'function') {
-                process.nextTick(function() {
-                  callback(err);
-                });
+                process.nextTick(() => callback(err));
               }
             });
           }, this);
@@ -66,9 +60,7 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
             // wrap existing reset if one exists
             const oldReset = req.brute.reset;
             const newReset = reset;
-            reset = callback =>
-              oldReset(() => newReset(callback))
-            };
+            reset = callback => oldReset(() => newReset(callback));
           }
           req.brute = {
             reset
@@ -77,7 +69,7 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
 
         // filter request
         this.store.get(
-          key,
+          keyHash,
           _.bind(function(err, value) {
             if (err) {
               this.options.handleStoreError({
@@ -124,7 +116,7 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
 
             if (nextValidRequestTime <= this.now() || count <= this.options.freeRetries) {
               this.store.set(
-                key,
+                keyHash,
                 {
                   count: count + 1,
                   lastRequest: new Date(this.now()),
