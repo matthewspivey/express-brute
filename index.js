@@ -33,13 +33,10 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
   const keyFunc =
     typeof options.key === 'function' ? options.key : (req, res, next) => next(options.key);
 
-  // const getFailCallback =
-  //   typeof options.failCallback === 'function' ? options.failCallback : this.options.failCallback;
-
   const getFailCallback = _.bind(() => {
-    return typeof options.failCallback === 'undefined'
-      ? this.options.failCallback
-      : options.failCallback;
+    return typeof options.failCallback === 'function'
+      ? options.failCallback
+      : this.options.failCallback;
   }, this);
 
   // create middleware
@@ -69,10 +66,8 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
             // wrap existing reset if one exists
             const oldReset = req.brute.reset;
             const newReset = reset;
-            reset = function(callback) {
-              oldReset(function() {
-                newReset(callback);
-              });
+            reset = callback =>
+              oldReset(() => newReset(callback))
             };
           }
           req.brute = {
