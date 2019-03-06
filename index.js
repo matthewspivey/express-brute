@@ -102,7 +102,7 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
 
             let count = 0;
             let delay = 0;
-            let lastValidRequestTime = this.now();
+            let lastValidRequestTime = Date.now();
             let firstRequestTime = lastValidRequestTime;
             if (value) {
               count = value.count;
@@ -122,22 +122,22 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
             let remainingLifetime = this.options.lifetime || 0;
 
             if (!this.options.refreshTimeoutOnRequest && remainingLifetime > 0) {
-              remainingLifetime -= Math.floor((this.now() - firstRequestTime) / 1000);
+              remainingLifetime -= Math.floor((Date.now() - firstRequestTime) / 1000);
               if (remainingLifetime < 1) {
                 // it should be expired alredy, treat this as a new request and reset everything
                 count = 0;
                 delay = 0;
-                nextValidRequestTime = firstRequestTime = lastValidRequestTime = this.now();
+                nextValidRequestTime = firstRequestTime = lastValidRequestTime = Date.now();
                 remainingLifetime = this.options.lifetime || 0;
               }
             }
 
-            if (nextValidRequestTime <= this.now() || count <= this.options.freeRetries) {
+            if (nextValidRequestTime <= Date.now() || count <= this.options.freeRetries) {
               this.store.set(
                 keyHash,
                 {
                   count: count + 1,
-                  lastRequest: new Date(this.now()),
+                  lastRequest: Date.now(),
                   firstRequest: new Date(firstRequestTime)
                 },
                 remainingLifetime,
@@ -188,7 +188,6 @@ ExpressBrute.prototype.reset = function(ip, key2, callback) {
   this.store.reset(key, xyz);
 };
 
-ExpressBrute.prototype.now = () => Date.now();
 ExpressBrute.MemoryStore = MemoryStore;
 ExpressBrute.instanceCount = 0;
 module.exports = ExpressBrute;
