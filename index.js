@@ -2,6 +2,7 @@ const _ = require('underscore');
 const hashKey = require('./src/hashKey.js');
 const { fibonacci } = require('./src/sequence.js');
 const { failTooManyRequests, failForbidden, failMark } = require('./src/expressErrors.js');
+const MemoryStore = require('./lib/MemoryStore');
 
 function ExpressBrute(store, options) {
   ExpressBrute.instanceCount += 1;
@@ -35,8 +36,9 @@ function ExpressBrute(store, options) {
 
   // set default lifetime
   if (!Number.isInteger(this.options.lifetime)) {
-    this.options.lifetime =
-      Math.ceil((this.options.maxWait / 1000) * (this.delays.length + this.options.freeRetries));
+    this.options.lifetime = Math.ceil(
+      (this.options.maxWait / 1000) * (this.delays.length + this.options.freeRetries)
+    );
   }
 
   // build an Express error that we can reuse
@@ -61,9 +63,7 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
       req,
       res,
       _.bind(key => {
-        const keyHash = ExpressBrute._getKey(
-          options.ignoreIP ? [this.name, key] : [req.ip, this.name, key]
-        );
+        const keyHash = hashKey(options.ignoreIP ? [this.name, key] : [req.ip, this.name, key]);
 
         // attach a simpler "reset" function to req.brute.reset
         if (this.options.attachResetToRequest) {
@@ -99,7 +99,7 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
               });
               return;
             }
-            /////////////////////////////
+
             let count = 0;
             let delay = 0;
             let lastValidRequestTime = this.now();
@@ -164,14 +164,13 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
             }
           }, this)
         );
-        ////////////////////////////////////
       }, this)
     );
   }, this);
 };
 
 ExpressBrute.prototype.reset = function(ip, key2, callback) {
-  const key = ExpressBrute._getKey([ip, this.name, key2]);
+  const key = hashKey([ip, this.name, key2]);
 
   const xyz = err => {
     if (err) {
@@ -193,7 +192,6 @@ ExpressBrute.prototype.now = () => Date.now();
 ExpressBrute.FailTooManyRequests = failTooManyRequests;
 ExpressBrute.FailForbidden = failForbidden;
 ExpressBrute.FailMark = failMark;
-ExpressBrute._getKey = hashKey;
-ExpressBrute.MemoryStore = require('./lib/MemoryStore');
+ExpressBrute.MemoryStore = MemoryStore;
 ExpressBrute.instanceCount = 0;
 module.exports = ExpressBrute;

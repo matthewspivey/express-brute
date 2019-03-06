@@ -4,6 +4,7 @@ var chai = require('chai'),
     sinonChai = require('sinon-chai'),
     ExpressBrute = require("../index"),
     ResponseMock = require('../mock/ResponseMock');
+const hashKey = require('../src/hashKey.js');
 
 chai.use(sinonChai);
 
@@ -579,7 +580,7 @@ describe("express brute", function () {
 			storeErrorSpy.should.have.been.calledWithMatch({
 				message: "Cannot reset request count",
 				parent: err,
-				key: ExpressBrute._getKey(['1.2.3.4', brute.name, key]),
+				key: hashKey(['1.2.3.4', brute.name, key]),
 				ip: '1.2.3.4'
 			});
 			errorSpy.should.not.have.been.called;
