@@ -7,6 +7,7 @@ const MemoryStore = require('./lib/MemoryStore');
 function ExpressBrute(store, options) {
   ExpressBrute.instanceCount += 1;
   this.name = `brute${ExpressBrute.instanceCount}`;
+  this.store = store;
 
   // set options
   this.options = {
@@ -29,7 +30,6 @@ function ExpressBrute(store, options) {
   if (this.options.minWait < 1) {
     this.options.minWait = 1;
   }
-  this.store = store;
 
   // build array of delays in a Fibonacci sequence, such as [1,1,2,3,5]
   this.delays = fibonacci(this.options.minWait, this.options.maxWait);
@@ -43,6 +43,26 @@ function ExpressBrute(store, options) {
 
   // build an Express error that we can reuse
   this.prevent = this.getMiddleware();
+}
+
+function attachResetToRequest(req, store, keyHash) {
+  let reset = _.bind(callback => {
+    store.reset(keyHash, err => {
+      if (typeof callback === 'function') {
+        process.nextTick(() => callback(err));
+      }
+    });
+  }, this);
+  if (req.brute && req.brute.reset) {
+    // wrap existing reset if one exists
+    const oldReset = req.brute.reset;
+    const newReset = reset;
+    reset = callback => oldReset(() => newReset(callback));
+  }
+
+  req.brute = {
+    reset
+  };
 }
 
 ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
@@ -67,22 +87,7 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
 
         // attach a simpler "reset" function to req.brute.reset
         if (this.options.attachResetToRequest) {
-          let reset = _.bind(callback => {
-            this.store.reset(keyHash, err => {
-              if (typeof callback === 'function') {
-                process.nextTick(() => callback(err));
-              }
-            });
-          }, this);
-          if (req.brute && req.brute.reset) {
-            // wrap existing reset if one exists
-            const oldReset = req.brute.reset;
-            const newReset = reset;
-            reset = callback => oldReset(() => newReset(callback));
-          }
-          req.brute = {
-            reset
-          };
+          attachResetToRequest(req, this.store, keyHash);
         }
 
         // filter request
@@ -111,11 +116,8 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
 
               const delayIndex = value.count - this.options.freeRetries - 1;
               if (delayIndex >= 0) {
-                if (delayIndex < this.delays.length) {
-                  delay = this.delays[delayIndex];
-                } else {
-                  delay = this.options.maxWait;
-                }
+                delay =
+                  delayIndex < this.delays.length ? this.delays[delayIndex] : this.options.maxWait;
               }
             }
             let nextValidRequestTime = lastValidRequestTime + delay;
