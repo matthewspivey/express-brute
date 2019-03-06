@@ -165,18 +165,15 @@ ExpressBrute.prototype.reset = function(ip, key, callback) {
         });
       } else if (typeof callback === 'function') {
         process.nextTick(
-          _.bind(function() {
-            callback.apply(this, arguments);
+          _.bind((...args) => {
+            callback.apply(this, args);
           }, this)
         );
       }
     }, this)
   );
 };
-ExpressBrute.prototype.now = function() {
-  return Date.now();
-};
-
+ExpressBrute.prototype.now = () => Date.now();
 ExpressBrute.FailTooManyRequests = failTooManyRequests;
 ExpressBrute.FailForbidden = failForbidden;
 ExpressBrute.FailMark = failMark;
