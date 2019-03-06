@@ -1,19 +1,15 @@
 const crypto = require('crypto');
 
-function hashKey(arr) {
-  const key = arr
-    .filter(part => part)
-    .map(part =>
-      crypto
-        .createHash('sha256')
-        .update(part)
-        .digest('base64')
-    )
-    .join();
-  return crypto
+// 'x' => 'hashofx'
+const hashString = str =>
+  crypto
     .createHash('sha256')
-    .update(key)
+    .update(str)
     .digest('base64');
-}
 
-module.exports = hashKey;
+// ['x','y','z'] => 'hasedXhashedYhashedZ'
+module.exports = arr =>
+  arr
+    .filter(part => part)
+    .map(hashString)
+    .join();

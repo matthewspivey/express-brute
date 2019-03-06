@@ -8,7 +8,23 @@ function ExpressBrute(store, options) {
   this.name = `brute${ExpressBrute.instanceCount}`;
 
   // set options
-  this.options = { ...ExpressBrute.defaults, ...options };
+  this.options = {
+    freeRetries: 2,
+    proxyDepth: 0,
+    attachResetToRequest: true,
+    refreshTimeoutOnRequest: true,
+    minWait: 500,
+    maxWait: 1000 * 60 * 15, // 15 minutes
+    failCallback: ExpressBrute.FailTooManyRequests,
+    handleStoreError(err) {
+      throw {
+        message: err.message,
+        parent: err.parent
+      };
+    },
+    ...options
+  };
+
   if (this.options.minWait < 1) {
     this.options.minWait = 1;
   }
@@ -180,21 +196,5 @@ ExpressBrute.FailForbidden = failForbidden;
 ExpressBrute.FailMark = failMark;
 ExpressBrute._getKey = hashKey;
 ExpressBrute.MemoryStore = require('./lib/MemoryStore');
-
-ExpressBrute.defaults = {
-  freeRetries: 2,
-  proxyDepth: 0,
-  attachResetToRequest: true,
-  refreshTimeoutOnRequest: true,
-  minWait: 500,
-  maxWait: 1000 * 60 * 15, // 15 minutes
-  failCallback: ExpressBrute.FailTooManyRequests,
-  handleStoreError(err) {
-    throw {
-      message: err.message,
-      parent: err.parent
-    };
-  }
-};
 ExpressBrute.instanceCount = 0;
 module.exports = ExpressBrute;
