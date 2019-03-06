@@ -46,7 +46,9 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
       req,
       res,
       _.bind(key => {
-        const keyHash = ExpressBrute._getKey(options.ignoreIP ? [this.name, key] : [req.ip, this.name, key]);
+        const keyHash = ExpressBrute._getKey(
+          options.ignoreIP ? [this.name, key] : [req.ip, this.name, key]
+        );
 
         // attach a simpler "reset" function to req.brute.reset
         if (this.options.attachResetToRequest) {
@@ -82,7 +84,7 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
               });
               return;
             }
-/////////////////////////////
+            /////////////////////////////
             let count = 0;
             let delay = 0;
             let lastValidRequestTime = this.now();
@@ -124,18 +126,20 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
                   firstRequest: new Date(firstRequestTime)
                 },
                 remainingLifetime,
-                _.bind(function(err) {
-                  if (err) {
+                _.bind(err2 => {
+                  if (err2) {
                     this.options.handleStoreError({
                       req,
                       res,
                       next,
                       message: 'Cannot increment request count',
-                      parent: err
+                      parent: err2
                     });
                     return;
                   }
-                  typeof next === 'function' && next();
+                  if (typeof next === 'function') {
+                    next();
+                  }
                 }, this)
               );
             } else {
@@ -143,36 +147,33 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
               typeof failCallback === 'function' &&
                 failCallback(req, res, next, new Date(nextValidRequestTime));
             }
-/////////////////////////////
           }, this)
         );
-////////////////////////////////////
+        ////////////////////////////////////
       }, this)
     );
   }, this);
 };
-ExpressBrute.prototype.reset = function(ip, key, callback) {
-  key = ExpressBrute._getKey([ip, this.name, key]);
-  this.store.reset(
-    key,
-    _.bind(function(err) {
-      if (err) {
-        this.options.handleStoreError({
-          message: 'Cannot reset request count',
-          parent: err,
-          key,
-          ip
-        });
-      } else if (typeof callback === 'function') {
-        process.nextTick(
-          _.bind((...args) => {
-            callback.apply(this, args);
-          }, this)
-        );
-      }
-    }, this)
-  );
+
+ExpressBrute.prototype.reset = function(ip, key2, callback) {
+  const key = ExpressBrute._getKey([ip, this.name, key2]);
+
+  const xyz = err => {
+    if (err) {
+      this.options.handleStoreError({
+        message: 'Cannot reset request count',
+        parent: err,
+        key,
+        ip
+      });
+    } else if (typeof callback === 'function') {
+      process.nextTick(callback);
+    }
+  };
+
+  this.store.reset(key, xyz);
 };
+
 ExpressBrute.prototype.now = () => Date.now();
 ExpressBrute.FailTooManyRequests = failTooManyRequests;
 ExpressBrute.FailForbidden = failForbidden;
