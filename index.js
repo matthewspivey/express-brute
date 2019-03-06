@@ -1,6 +1,7 @@
 const _ = require('underscore');
 const hashKey = require('./src/hashKey.js');
 const { fibonacci } = require('./src/sequence.js');
+const { failTooManyRequests, failForbidden, failMark } = require('./src/expressErrors.js');
 
 function ExpressBrute(store, options) {
   ExpressBrute.instanceCount += 1;
@@ -50,7 +51,7 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
         // attach a simpler "reset" function to req.brute.reset
         if (this.options.attachResetToRequest) {
           let reset = _.bind(callback => {
-            this.store.reset(keyHash, function(err) {
+            this.store.reset(keyHash, err => {
               if (typeof callback === 'function') {
                 process.nextTick(() => callback(err));
               }
@@ -70,7 +71,7 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
         // filter request
         this.store.get(
           keyHash,
-          _.bind(function(err, value) {
+          _.bind((err, value) => {
             if (err) {
               this.options.handleStoreError({
                 req,
@@ -81,7 +82,7 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
               });
               return;
             }
-
+/////////////////////////////
             let count = 0;
             let delay = 0;
             let lastValidRequestTime = this.now();
@@ -142,8 +143,10 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
               typeof failCallback === 'function' &&
                 failCallback(req, res, next, new Date(nextValidRequestTime));
             }
+/////////////////////////////
           }, this)
         );
+////////////////////////////////////
       }, this)
     );
   }, this);
@@ -174,40 +177,10 @@ ExpressBrute.prototype.now = function() {
   return Date.now();
 };
 
-const setRetryAfter = function(res, nextValidRequestDate) {
-  const secondUntilNextRequest = Math.ceil((nextValidRequestDate.getTime() - Date.now()) / 1000);
-  res.header('Retry-After', secondUntilNextRequest);
-};
-ExpressBrute.FailTooManyRequests = function(req, res, next, nextValidRequestDate) {
-  setRetryAfter(res, nextValidRequestDate);
-  res.status(429);
-  res.send({
-    error: {
-      text: 'Too many requests in this time frame.',
-      nextValidRequestDate
-    }
-  });
-};
-ExpressBrute.FailForbidden = function(req, res, next, nextValidRequestDate) {
-  setRetryAfter(res, nextValidRequestDate);
-  res.status(403);
-  res.send({
-    error: {
-      text: 'Too many requests in this time frame.',
-      nextValidRequestDate
-    }
-  });
-};
-ExpressBrute.FailMark = function(req, res, next, nextValidRequestDate) {
-  res.status(429);
-  setRetryAfter(res, nextValidRequestDate);
-  res.nextValidRequestDate = nextValidRequestDate;
-  next();
-};
-ExpressBrute._getKey = function(arr) {
-  return hashKey(arr);
-};
-
+ExpressBrute.FailTooManyRequests = failTooManyRequests;
+ExpressBrute.FailForbidden = failForbidden;
+ExpressBrute.FailMark = failMark;
+ExpressBrute._getKey = hashKey;
 ExpressBrute.MemoryStore = require('./lib/MemoryStore');
 
 ExpressBrute.defaults = {
