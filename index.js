@@ -30,17 +30,16 @@ function ExpressBrute(store, options) {
   }
   this.store = store;
 
-  // build delays array
+  // build array of delays in a Fibonacci sequence, such as [1,1,2,3,5]
   this.delays = fibonacci(this.options.minWait, this.options.maxWait);
 
   // set default lifetime
-  if (typeof this.options.lifetime === 'undefined') {
+  if (!Number.isInteger(this.options.lifetime)) {
     this.options.lifetime =
-      (this.options.maxWait / 1000) * (this.delays.length + this.options.freeRetries);
-    this.options.lifetime = Math.ceil(this.options.lifetime);
+      Math.ceil((this.options.maxWait / 1000) * (this.delays.length + this.options.freeRetries));
   }
 
-  // generate "prevent" middleware
+  // build an Express error that we can reuse
   this.prevent = this.getMiddleware();
 }
 
