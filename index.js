@@ -1,7 +1,7 @@
 const _ = require('underscore');
 const hashKey = require('./src/hashKey.js');
 const { fibonacci } = require('./src/sequence.js');
-const { failTooManyRequests, failForbidden, failMark } = require('./src/expressErrors.js');
+const { failTooManyRequests } = require('./src/expressErrors.js');
 const MemoryStore = require('./lib/MemoryStore');
 
 function ExpressBrute(store, options) {
@@ -16,7 +16,7 @@ function ExpressBrute(store, options) {
     refreshTimeoutOnRequest: true,
     minWait: 500,
     maxWait: 1000 * 60 * 15, // 15 minutes
-    failCallback: ExpressBrute.FailTooManyRequests,
+    failCallback: failTooManyRequests,
     handleStoreError(err) {
       throw {
         message: err.message,
@@ -189,9 +189,6 @@ ExpressBrute.prototype.reset = function(ip, key2, callback) {
 };
 
 ExpressBrute.prototype.now = () => Date.now();
-ExpressBrute.FailTooManyRequests = failTooManyRequests;
-ExpressBrute.FailForbidden = failForbidden;
-ExpressBrute.FailMark = failMark;
 ExpressBrute.MemoryStore = MemoryStore;
 ExpressBrute.instanceCount = 0;
 module.exports = ExpressBrute;

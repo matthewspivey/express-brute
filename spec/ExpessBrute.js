@@ -5,7 +5,7 @@ var chai = require('chai'),
     ExpressBrute = require("../index"),
     ResponseMock = require('../mock/ResponseMock');
 const hashKey = require('../src/hashKey.js');
-
+const { failTooManyRequests, failForbidden, failMark } = require('../src/expressErrors.js');
 chai.use(sinonChai);
 
 describe("express brute", function () {
@@ -475,7 +475,7 @@ describe("express brute", function () {
 				freeRetries: 0,
 				minWait: 10,
 				maxWait: 100,
-				failCallback: ExpressBrute.FailTooManyRequests
+				failCallback: failTooManyRequests
 			});
 			brute.prevent(req(), res, nextSpy);
 			brute.prevent(req(), res, nextSpy);
@@ -488,7 +488,7 @@ describe("express brute", function () {
 				freeRetries: 0,
 				minWait: 10,
 				maxWait: 100,
-				failCallback: ExpressBrute.FailForbidden
+				failCallback: failForbidden
 			});
 			brute.prevent(req(), res, nextSpy);
 			brute.prevent(req(), res, nextSpy);
@@ -501,7 +501,7 @@ describe("express brute", function () {
 				freeRetries: 0,
 				minWait: 10,
 				maxWait: 100,
-				failCallback: ExpressBrute.FailMark
+				failCallback: failMark
 			});
 			brute.prevent(req(), res, nextSpy);
 			brute.prevent(req(), res, nextSpy);
@@ -516,7 +516,7 @@ describe("express brute", function () {
 				freeRetries: 0,
 				minWait: 10,
 				maxWait: 100,
-				failCallback: ExpressBrute.FailTooManyRequests
+				failCallback: failTooManyRequests
 			});
 			brute.prevent(req(), res, nextSpy);
 			brute.prevent(req(), res, nextSpy);
