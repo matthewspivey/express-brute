@@ -19,10 +19,10 @@ function ExpressBrute(store, options) {
     maxWait: 1000 * 60 * 15, // 15 minutes
     failCallback: failTooManyRequests,
     handleStoreError(err) {
-      throw {
+      throw new Error({
         message: err.message,
         parent: err.parent
-      };
+      });
     },
     ...options
   };
@@ -77,11 +77,12 @@ function computeStuff(value, options, delays) {
     }
   }
   const nextValidRequestTime = lastValidRequestTime + delay;
-  let remainingLifetime = options.lifetime || 0;
+  const remainingLifetime = options.lifetime || 0;
 
   if (!options.refreshTimeoutOnRequest && remainingLifetime > 0) {
-    remainingLifetime -= Math.floor((Date.now() - firstRequestTime) / 1000);
-    if (remainingLifetime < 1) {
+    const remainingLifetime2 =
+      remainingLifetime - Math.floor((Date.now() - firstRequestTime) / 1000);
+    if (remainingLifetime2 < 1) {
       // it should be expired alredy, treat this as a new request and reset everything
       const now = Date.now();
       return {
