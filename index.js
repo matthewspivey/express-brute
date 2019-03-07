@@ -65,6 +65,37 @@ function attachResetToRequest(req, store, keyHash) {
   };
 }
 
+function computeStuff(value, options, delays) {
+  let count = value ? value.count : 0;
+  let delay = 0;
+  let lastValidRequestTime = Date.now();
+  let firstRequestTime = lastValidRequestTime;
+  if (value) {
+    lastValidRequestTime = value.lastRequest.getTime();
+    firstRequestTime = value.firstRequest.getTime();
+
+    const delayIndex = value.count - options.freeRetries - 1;
+    if (delayIndex >= 0) {
+      delay = delayIndex < delays.length ? delays[delayIndex] : options.maxWait;
+    }
+  }
+  let nextValidRequestTime = lastValidRequestTime + delay;
+  let remainingLifetime = options.lifetime || 0;
+
+  if (!options.refreshTimeoutOnRequest && remainingLifetime > 0) {
+    remainingLifetime -= Math.floor((Date.now() - firstRequestTime) / 1000);
+    if (remainingLifetime < 1) {
+      // it should be expired alredy, treat this as a new request and reset everything
+      count = 0;
+      delay = 0;
+      nextValidRequestTime = firstRequestTime = lastValidRequestTime = Date.now();
+      remainingLifetime = options.lifetime || 0;
+    }
+  }
+
+  return { count, firstRequestTime, remainingLifetime, nextValidRequestTime };
+}
+
 ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
   // standardize input
   const options = { ...optionsRaw };
@@ -105,36 +136,24 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
               return;
             }
 
-            let count = 0;
-            let delay = 0;
-            let lastValidRequestTime = Date.now();
-            let firstRequestTime = lastValidRequestTime;
-            if (value) {
-              count = value.count;
-              lastValidRequestTime = value.lastRequest.getTime();
-              firstRequestTime = value.firstRequest.getTime();
-
-              const delayIndex = value.count - this.options.freeRetries - 1;
-              if (delayIndex >= 0) {
-                delay =
-                  delayIndex < this.delays.length ? this.delays[delayIndex] : this.options.maxWait;
-              }
-            }
-            let nextValidRequestTime = lastValidRequestTime + delay;
-            let remainingLifetime = this.options.lifetime || 0;
-
-            if (!this.options.refreshTimeoutOnRequest && remainingLifetime > 0) {
-              remainingLifetime -= Math.floor((Date.now() - firstRequestTime) / 1000);
-              if (remainingLifetime < 1) {
-                // it should be expired alredy, treat this as a new request and reset everything
-                count = 0;
-                delay = 0;
-                nextValidRequestTime = firstRequestTime = lastValidRequestTime = Date.now();
-                remainingLifetime = this.options.lifetime || 0;
-              }
-            }
+            const {
+              count,
+              firstRequestTime,
+              remainingLifetime,
+              nextValidRequestTime
+            } = computeStuff(value, this.options, this.delays);
 
             if (nextValidRequestTime <= Date.now() || count <= this.options.freeRetries) {
+              // SET FUNCTION Needed below
+              //
+              // count
+              // firstRequestTime
+              // remainingLifetime
+              //
+              // next()
+              // keyHash()
+              //
+
               this.store.set(
                 keyHash,
                 {
