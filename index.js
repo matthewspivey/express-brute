@@ -42,7 +42,7 @@ function ExpressBrute(store, options = {}) {
   this.prevent = this.getMiddleware();
 }
 
-function attachResetToRequest(req, store, keyHash) {
+function attachResetToRequestFunc(req, store, keyHash) {
   let reset = _.bind(callback => {
     store.reset(keyHash, err => {
       if (typeof callback === 'function') {
@@ -66,7 +66,7 @@ function attachResetToRequest(req, store, keyHash) {
 function computeNewTimes(value, options, getDelay, now) {
   const remainingLifetime = options.lifetime || 0;
   const count = value ? value.count : 0;
-  const lastValidRequestTime = value ? value.lastRequest.getTime() : Date.now();
+  const lastValidRequestTime = value ? value.lastRequest.getTime() : now;
   const firstRequestTime = value ? value.firstRequest.getTime() : lastValidRequestTime;
   const delay = value ? getDelay(value.count) : 0;
   const nextValidRequestTime = lastValidRequestTime + delay;
@@ -104,7 +104,7 @@ ExpressBrute.prototype.getMiddleware = function getMiddleware(optionsRaw = {}) {
       return optionsRaw.failCallback;
     }
 
-    // use global middleware 
+    // use global middleware
     if (typeof this.options.failCallback === 'function') {
       return this.options.failCallback;
     }
@@ -123,7 +123,7 @@ ExpressBrute.prototype.getMiddleware = function getMiddleware(optionsRaw = {}) {
 
         // attach a simpler "reset" function to req.brute.reset
         if (this.options.attachResetToRequest) {
-          attachResetToRequest(req, this.store, keyHash);
+          attachResetToRequestFunc(req, this.store, keyHash);
         }
 
         // filter request
@@ -194,7 +194,7 @@ ExpressBrute.prototype.reset = function(ip, key2, callback) {
         ip
       });
     } else if (typeof callback === 'function') {
-      process.nextTick(callback);
+      process.nextTick(callback); // use nextTick to ???
     }
   };
 
