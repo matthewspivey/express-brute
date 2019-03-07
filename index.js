@@ -4,7 +4,7 @@ const { fibonacci } = require('./src/sequence.js');
 const { failTooManyRequests } = require('./src/expressErrors.js');
 const MemoryStore = require('./lib/MemoryStore');
 
-function ExpressBrute(store, options) {
+function ExpressBrute(store, options = {}) {
   ExpressBrute.instanceCount += 1;
   this.name = `brute${ExpressBrute.instanceCount}`;
   this.store = store;
@@ -12,11 +12,8 @@ function ExpressBrute(store, options) {
   // set options
   this.options = {
     freeRetries: 2,
-    proxyDepth: 0,
     attachResetToRequest: true,
     refreshTimeoutOnRequest: true,
-    minWait: 500,
-    maxWait: 1000 * 60 * 15, // 15 minutes
     failCallback: failTooManyRequests,
     handleStoreError(err) {
       throw new Error({
@@ -27,21 +24,21 @@ function ExpressBrute(store, options) {
     ...options
   };
 
-  if (this.options.minWait < 1) {
-    this.options.minWait = 1;
-  }
+  const isPositiveInteger = val => Number.isInteger(val) && val > 0;
+  const minWait = isPositiveInteger(options.minWait) ? options.minWait : 500; // 500 ms
+  const maxWait = isPositiveInteger(options.maxWait) ? options.maxWait : 1000 * 60 * 15; // 15 minutes
 
-  // build array of delays in a Fibonacci sequence, such as [1,1,2,3,5]
-  this.delays = fibonacci(this.options.minWait, this.options.maxWait);
+  // setup timing
+  const { delays, getDelay, defaultLifetime } = fibonacci(
+    minWait,
+    maxWait,
+    this.options.freeRetries
+  );
+  this.delays = delays; // TODO - remove - this is only here to make tests pass
+  this.getDelay = getDelay;
+  this.options.lifetime = isPositiveInteger(options.lifetime) ? options.lifetime : defaultLifetime;
 
-  // set default lifetime
-  if (!Number.isInteger(this.options.lifetime)) {
-    this.options.lifetime = Math.ceil(
-      (this.options.maxWait / 1000) * (this.delays.length + this.options.freeRetries)
-    );
-  }
-
-  // build an Express error that we can reuse
+  // build an Express error that we can reuse without calling the middleware
   this.prevent = this.getMiddleware();
 }
 
@@ -65,38 +62,32 @@ function attachResetToRequest(req, store, keyHash) {
   };
 }
 
-function computeStuff(value, options, delays) {
+function computeNewTimes(value, options, getDelay, now) {
+  const remainingLifetime = options.lifetime || 0;
   const count = value ? value.count : 0;
   const lastValidRequestTime = value ? value.lastRequest.getTime() : Date.now();
   const firstRequestTime = value ? value.firstRequest.getTime() : lastValidRequestTime;
-  let delay = 0;
-  if (value) {
-    const delayIndex = value.count - options.freeRetries - 1;
-    if (delayIndex >= 0) {
-      delay = delayIndex < delays.length ? delays[delayIndex] : options.maxWait;
-    }
-  }
+  const delay = value ? getDelay(value.count) : 0;
   const nextValidRequestTime = lastValidRequestTime + delay;
-  const remainingLifetime = options.lifetime || 0;
 
-  if (!options.refreshTimeoutOnRequest && remainingLifetime > 0) {
-    const remainingLifetime2 =
-      remainingLifetime - Math.floor((Date.now() - firstRequestTime) / 1000);
-    if (remainingLifetime2 < 1) {
-      // it should be expired alredy, treat this as a new request and reset everything
-      const now = Date.now();
-      return {
-        count: 0,
-        delay: 0,
-        nextValidRequestTime: now,
-        firstRequestTime: now,
-        lastValidRequestTime: now,
-        remainingLifetime: options.lifetime || 0
-      };
-    }
+  // dafuq is refreshTimeoutOnRequest
+  if (options.refreshTimeoutOnRequest || remainingLifetime <= 0) {
+    return { count, firstRequestTime, remainingLifetime, nextValidRequestTime };
   }
 
-  return { count, firstRequestTime, remainingLifetime, nextValidRequestTime };
+  const secondsSinceFirstRequest = Math.floor((now - firstRequestTime) / 1000);
+  if (remainingLifetime > secondsSinceFirstRequest) {
+    return { count, firstRequestTime, remainingLifetime, nextValidRequestTime };
+  }
+
+  // TODO - write a test to cover this one
+  // it should be expired alredy, treat this as a new request and reset everything
+  return {
+    count: 0,
+    firstRequestTime: now,
+    remainingLifetime,
+    nextValidRequestTime: now
+  };
 }
 
 ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
@@ -139,24 +130,15 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
               return;
             }
 
+            const now = Date.now();
             const {
               count,
               firstRequestTime,
               remainingLifetime,
               nextValidRequestTime
-            } = computeStuff(value, this.options, this.delays);
+            } = computeNewTimes(value, this.options, this.getDelay, now);
 
-            if (nextValidRequestTime <= Date.now() || count <= this.options.freeRetries) {
-              // SET FUNCTION Needed below
-              //
-              // count
-              // firstRequestTime
-              // remainingLifetime
-              //
-              // next()
-              // keyHash()
-              //
-
+            if (nextValidRequestTime <= now || count <= this.options.freeRetries) {
               this.store.set(
                 keyHash,
                 {
@@ -183,8 +165,9 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw) {
               );
             } else {
               const failCallback = getFailCallback();
-              typeof failCallback === 'function' &&
+              if (typeof failCallback === 'function') {
                 failCallback(req, res, next, new Date(nextValidRequestTime));
+              }
             }
           }, this)
         );
@@ -212,6 +195,6 @@ ExpressBrute.prototype.reset = function(ip, key2, callback) {
   this.store.reset(key, xyz);
 };
 
-ExpressBrute.MemoryStore = MemoryStore;
+ExpressBrute.MemoryStore = MemoryStore; // TODO - this is mostly here for tests and examples
 ExpressBrute.instanceCount = 0;
 module.exports = ExpressBrute;
