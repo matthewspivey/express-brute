@@ -91,7 +91,7 @@ function computeNewTimes(value, options, getDelay, now) {
   };
 }
 
-ExpressBrute.prototype.getMiddleware = function(optionsRaw = {}) {
+ExpressBrute.prototype.getMiddleware = function getMiddleware(optionsRaw = {}) {
   const { key, ignoreIP = false } = optionsRaw;
   const { handleStoreError } = this.options;
 
@@ -99,14 +99,17 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw = {}) {
   const keyFunc = typeof key === 'function' ? key : (req, res, next) => next(key);
 
   const getFailCallback = _.bind(() => {
+    // use callback for this middleware
     if (typeof optionsRaw.failCallback === 'function') {
       return optionsRaw.failCallback;
     }
 
+    // use global middleware 
     if (typeof this.options.failCallback === 'function') {
       return this.options.failCallback;
     }
 
+    // ignore failure
     return () => undefined;
   }, this);
 
@@ -151,30 +154,27 @@ ExpressBrute.prototype.getMiddleware = function(optionsRaw = {}) {
               return;
             }
 
-            this.store.set(
-              keyHash,
-              {
-                count: count + 1,
-                lastRequest: now,
-                firstRequest: new Date(firstRequestTime)
-              },
-              remainingLifetime,
-              setError => {
-                if (setError) {
-                  handleStoreError({
-                    req,
-                    res,
-                    next,
-                    message: 'Cannot increment request count',
-                    parent: setError
-                  });
-                  return;
-                }
-                if (typeof next === 'function') {
-                  next();
-                }
+            const newValue = {
+              count: count + 1,
+              lastRequest: now,
+              firstRequest: new Date(firstRequestTime)
+            };
+
+            this.store.set(keyHash, newValue, remainingLifetime, setError => {
+              if (setError) {
+                handleStoreError({
+                  req,
+                  res,
+                  next,
+                  message: 'Cannot increment request count',
+                  parent: setError
+                });
+                return;
               }
-            );
+              if (typeof next === 'function') {
+                next();
+              }
+            });
           }, this)
         );
       }, this)
