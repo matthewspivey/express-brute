@@ -15,7 +15,8 @@
   "license": "BSD",
   "private": false,
   "scripts": {
-    "test": "nyc mocha spec"
+    "test": "nyc mocha spec",
+    "lint": "eslint --fix index.js src/*.js"
   },
   "repository": {
     "type": "git",
