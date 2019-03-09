@@ -4,6 +4,8 @@ const { fibonacci } = require('./src/sequence.js');
 const { failTooManyRequests } = require('./src/expressErrors.js');
 const MemoryStore = require('./lib/MemoryStore');
 
+// TODO - depending on the value of refreshTimeoutOnRequest, we may need to only cache either the timestamp of the first or last request, not both.
+
 function ExpressBrute(store, options = {}) {
   ExpressBrute.instanceCount += 1;
   this.name = `brute${ExpressBrute.instanceCount}`;
@@ -63,32 +65,45 @@ function attachResetToRequestFunc(req, store, keyHash) {
 }
 
 // TODO - rewrite this to make the logic more obvious
-function computeNewTimes(value, options, getDelay, now) {
-  const remainingLifetime = options.lifetime || 0;
-  const count = value ? value.count : 0;
-  const lastValidRequestTime = value ? value.lastRequest.getTime() : now;
-  const firstRequestTime = value ? value.firstRequest.getTime() : lastValidRequestTime;
-  const delay = value ? getDelay(value.count) : 0;
-  const nextValidRequestTime = lastValidRequestTime + delay;
+function computeNewTimes(value, refreshTimeoutOnRequest, lifetime, getDelay, now) {
+  const freshValue = {
+    count: 0,
+    firstRequestTime: now,
+    remainingLifetime: lifetime,
+    nextValidRequestTime: now
+  };
 
-  // dafuq is refreshTimeoutOnRequest
-  if (options.refreshTimeoutOnRequest || remainingLifetime <= 0) {
+  // on cache miss, return values for a new counter
+  if (!value) {
+    return freshValue;
+  }
+
+  const { count } = value;
+  const lastValidRequestTime = value.lastRequest.getTime();
+  const firstRequestTime = value.firstRequest.getTime();
+  const nextValidRequestTime = lastValidRequestTime + getDelay(count);
+
+  // TODO - document
+  if (refreshTimeoutOnRequest) {
+    return { count, firstRequestTime, remainingLifetime: lifetime, nextValidRequestTime };
+  }
+
+  const remainingLifetime = lifetime - Math.floor((now - firstRequestTime) / 1000);
+
+  // TODO - document the significance of remaining lifetime being zero, as well as negative
+  if (remainingLifetime <= 0) {
     return { count, firstRequestTime, remainingLifetime, nextValidRequestTime };
   }
 
+  // TODO - document the significance of this condition
   const secondsSinceFirstRequest = Math.floor((now - firstRequestTime) / 1000);
   if (remainingLifetime > secondsSinceFirstRequest) {
     return { count, firstRequestTime, remainingLifetime, nextValidRequestTime };
   }
 
-  // TODO - write a test to cover this one
-  // it should be expired alredy, treat this as a new request and reset everything
-  return {
-    count: 0,
-    firstRequestTime: now,
-    remainingLifetime,
-    nextValidRequestTime: now
-  };
+  // TODO - document the significance of this
+  // it should be expired already, treat this as a new request and reset everything
+  return freshValue;
 }
 
 ExpressBrute.prototype.getMiddleware = function getMiddleware(optionsRaw = {}) {
@@ -147,7 +162,13 @@ ExpressBrute.prototype.getMiddleware = function getMiddleware(optionsRaw = {}) {
               firstRequestTime,
               remainingLifetime,
               nextValidRequestTime
-            } = computeNewTimes(value, this.options, this.getDelay, now);
+            } = computeNewTimes(
+              value,
+              this.options.refreshTimeoutOnRequest,
+              this.options.lifetime,
+              this.getDelay,
+              now
+            );
 
             if (nextValidRequestTime > now && count > this.options.freeRetries) {
               getFailCallback()(req, res, next, new Date(nextValidRequestTime));
@@ -194,7 +215,7 @@ ExpressBrute.prototype.reset = function(ip, key2, callback) {
         ip
       });
     } else if (typeof callback === 'function') {
-      process.nextTick(callback); // use nextTick to ???
+      process.nextTick(callback); // why was nextTick added?
     }
   };
 
