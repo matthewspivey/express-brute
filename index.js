@@ -64,48 +64,6 @@ function attachResetToRequestFunc(req, store, keyHash) {
   };
 }
 
-// TODO - rewrite this to make the logic more obvious
-function computeNewTimes(value, refreshTimeoutOnRequest, lifetime, getDelay, now) {
-  const freshValue = {
-    count: 0,
-    firstRequestTime: now,
-    remainingLifetime: lifetime,
-    nextValidRequestTime: now
-  };
-
-  // on cache miss, return values for a new counter
-  if (!value) {
-    return freshValue;
-  }
-
-  const { count } = value;
-  const lastValidRequestTime = value.lastRequest.getTime();
-  const firstRequestTime = value.firstRequest.getTime();
-  const nextValidRequestTime = lastValidRequestTime + getDelay(count);
-
-  // TODO - document
-  if (refreshTimeoutOnRequest) {
-    return { count, firstRequestTime, remainingLifetime: lifetime, nextValidRequestTime };
-  }
-
-  const remainingLifetime = lifetime - Math.floor((now - firstRequestTime) / 1000);
-
-  // TODO - document the significance of remaining lifetime being zero, as well as negative
-  if (remainingLifetime <= 0) {
-    return { count, firstRequestTime, remainingLifetime, nextValidRequestTime };
-  }
-
-  // TODO - document the significance of this condition
-  const secondsSinceFirstRequest = Math.floor((now - firstRequestTime) / 1000);
-  if (remainingLifetime > secondsSinceFirstRequest) {
-    return { count, firstRequestTime, remainingLifetime, nextValidRequestTime };
-  }
-
-  // TODO - document the significance of this
-  // it should be expired already, treat this as a new request and reset everything
-  return freshValue;
-}
-
 ExpressBrute.prototype.getMiddleware = function getMiddleware(optionsRaw = {}) {
   const { key, ignoreIP = false } = optionsRaw;
   const { handleStoreError } = this.options;
@@ -133,7 +91,7 @@ ExpressBrute.prototype.getMiddleware = function getMiddleware(optionsRaw = {}) {
     keyFunc(
       req,
       res,
-      _.bind(key2 => {
+      _.bind(async key2 => {
         const keyHash = hashKey(ignoreIP ? [this.name, key2] : [req.ip, this.name, key2]);
 
         // attach a simpler "reset" function to req.brute.reset
@@ -141,63 +99,34 @@ ExpressBrute.prototype.getMiddleware = function getMiddleware(optionsRaw = {}) {
           attachResetToRequestFunc(req, this.store, keyHash);
         }
 
-        // filter request
-        this.store.get(
-          keyHash,
-          _.bind((getError, value) => {
-            if (getError) {
-              handleStoreError({
-                req,
-                res,
-                next,
-                message: 'Cannot get request count',
-                parent: getError
-              });
-              return;
-            }
+        let value;
 
-            const now = Date.now();
-            const {
-              count,
-              firstRequestTime,
-              remainingLifetime,
-              nextValidRequestTime
-            } = computeNewTimes(
-              value,
-              this.options.refreshTimeoutOnRequest,
-              this.options.lifetime,
-              this.getDelay,
-              now
-            );
+        try {
+          value = await this.store.increment(keyHash); // pass lifetime when this.options.refreshTimeoutOnRequest is ___
+        } catch (errorMessage) {
+          handleStoreError({
+            req,
+            res,
+            next,
+            message: 'Cannot increment request count',
+            errorMessage
+          });
+          return;
+        }
 
-            if (nextValidRequestTime > now && count > this.options.freeRetries) {
-              getFailCallback()(req, res, next, new Date(nextValidRequestTime));
-              return;
-            }
+        // change "last" with "time"
+        const { count } = value;
 
-            const newValue = {
-              count: count + 1,
-              lastRequest: now,
-              firstRequest: new Date(firstRequestTime)
-            };
+        // TODO - assume refreshTimeoutOnRequest is __ for now, igonring first time stamp
+        const delay = this.getDelay(count, this.options.freeRetries);
+        if (delay) {
+          getFailCallback()(req, res, next, new Date(Date.now + delay));
+          return;
+        }
 
-            this.store.set(keyHash, newValue, remainingLifetime, setError => {
-              if (setError) {
-                handleStoreError({
-                  req,
-                  res,
-                  next,
-                  message: 'Cannot increment request count',
-                  parent: setError
-                });
-                return;
-              }
-              if (typeof next === 'function') {
-                next();
-              }
-            });
-          }, this)
-        );
+        if (typeof next === 'function') {
+          next();
+        }
       }, this)
     );
   }, this);
@@ -206,20 +135,20 @@ ExpressBrute.prototype.getMiddleware = function getMiddleware(optionsRaw = {}) {
 ExpressBrute.prototype.reset = function(ip, key2, callback) {
   const key = hashKey([ip, this.name, key2]);
 
-  const callbackFromStore = err => {
-    if (err) {
-      this.options.handleStoreError({
-        message: 'Cannot reset request count',
-        parent: err,
-        key,
-        ip
-      });
-    } else if (typeof callback === 'function') {
-      process.nextTick(callback); // why was nextTick added?
-    }
-  };
+  try {
+    this.store.reset(key);
+  } catch (errorMessage) {
+    this.options.handleStoreError({
+      message: 'Cannot reset request count',
+      parent: errorMessage,
+      key,
+      ip
+    });
+  }
 
-  this.store.reset(key, callbackFromStore);
+  if (typeof callback === 'function') {
+    process.nextTick(callback); // why was nextTick added?
+  }
 };
 
 ExpressBrute.MemoryStore = MemoryStore; // TODO - this is mostly here for tests and examples
