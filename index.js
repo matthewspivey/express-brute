@@ -45,6 +45,7 @@ function ExpressBrute(store, options = {}) {
 }
 
 function attachResetToRequestFunc(req, store, keyHash) {
+  // TODO - reset = () => store.reset(keyHash, this.options.lifetime, this.options.refreshTimeoutOnRequest);
   let reset = _.bind(callback => {
     store.reset(keyHash, err => {
       if (typeof callback === 'function') {
@@ -102,7 +103,11 @@ ExpressBrute.prototype.getMiddleware = function getMiddleware(optionsRaw = {}) {
         let value;
 
         try {
-          value = await this.store.increment(keyHash); // pass lifetime when this.options.refreshTimeoutOnRequest is ___
+          value = await this.store.increment(
+            keyHash,
+            this.options.lifetime,
+            this.options.refreshTimeoutOnRequest
+          ); // pass lifetime when this.options.refreshTimeoutOnRequest is ___
         } catch (errorMessage) {
           handleStoreError({
             req,
@@ -132,7 +137,7 @@ ExpressBrute.prototype.getMiddleware = function getMiddleware(optionsRaw = {}) {
   }, this);
 };
 
-ExpressBrute.prototype.reset = function(ip, key2, callback) {
+ExpressBrute.prototype.reset = function reset(ip, key2, callback) {
   const key = hashKey([ip, this.name, key2]);
 
   try {
